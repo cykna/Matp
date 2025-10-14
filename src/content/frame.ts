@@ -1,147 +1,196 @@
-import type { Bytes } from "../dependencies/bytes";
-import { VarId } from "./varid";
+import { Bytes } from "../dependencies/bytes";
 import { Struct } from "../dependencies/struct";
 import { StructArray } from "../dependencies/struct_arr";
+import { VarId } from "./varid";
+import { CryptoFlags, CryptoId, DataFlags, DataId, FrameId } from "./ids";
 
-export namespace Frame {
+export const enum FrameType {
+  Ping = 1,
+  Crypto = 2,
+  Content = 3,
+  CloseConnection = 4,
+}
 
-  export const enum FrameType {
-    Ping = 1,
-    Crypto = 2,
-    Content = 3,
-    CloseConnection = 4,
-  }
-
-  export const enum FrameFlags {
-    None = 0,
-    Fin = 1 << 0,
-    Lz4Compression = 1 << 1,
-    GzipCompression = 0b10 << 1,//1 << 2
-    ReservedCompression = 3 << 1, //11 << 1, 2 bits
-    Encrypted = 1 << 3
-  }
-
-  /** A class to track the identifier of a Frame. Note that this has nothing to do with the index of some */
-  export class FrameId {
-    static from(byte: number) {
-      return new this((byte & 0b11110000) >> 4, byte & 0b1111);
-    }
-    constructor(public readonly ty: FrameType, public readonly flags: FrameFlags) {
-    }
-    /** Checks weather this ID is a Fin */
-    is_fin() {
-      return (this.flags & FrameFlags.Fin) != 0;
-    }
-    is_compressed() {
-      return (this.flags & 0b110) != 0;
-    }
-    is_encrypted() {
-      return (this.flags & FrameFlags.Encrypted) != 0
-    }
-    valueOf() {
-      
-      return (this.ty << 4) | this.flags;
-    }
-  }
-  export class Frame extends Struct {
-    /** Deserialized the given `bytes` and tries to return some valid frame. If none, then returns undefined*/
-    static override deserialize(bytes: Bytes): Frame | undefined {
-      const id = FrameId.from(bytes.read_u8());
-      switch (id.ty) {
-        case FrameType.Ping: return new Ping;
-        case FrameType.Crypto:{
-          const identifier = VarId.deserialize(bytes);
-          const len = VarId.deserialize(bytes);
-          const slice = bytes.slice_from_current_with_length(+len);
-          return new Crypto(id.flags, slice, identifier);
-        };
-        case FrameType.Content: {
-          const identifier =VarId.deserialize(bytes);
-          const len = VarId.deserialize(bytes);
-          const slice = bytes.slice_from_current_with_length(+len);
-          return new Content(id.flags, slice, identifier);
-        }
-        default: return undefined;
+export class Frame extends Struct {
+  static Array = StructArray(this);
+  /** Deserialized the given `bytes` and tries to return some valid frame. If none, then returns undefined*/
+  static override deserialize(bytes: Bytes): Frame | undefined {
+    
+    const id = FrameId.from(bytes.read_u8());
+    switch (id.ty) {
+      case FrameType.Ping: return new Ping;
+      case FrameType.Crypto: {
+        const identifier = VarId.deserialize(bytes);
+        const len = VarId.deserialize(bytes);
+        const slice = bytes.slice_from_current_with_length(+len);
+        return new Crypto(id.flags, slice, identifier);
+      };
+      case FrameType.Content: {
+        const identifier = VarId.deserialize(bytes);
+        const len = VarId.deserialize(bytes);
+        const slice = bytes.slice_from_current_with_length(+len);
+        return new Data(id.flags, slice, identifier);
       }
+      default: return undefined;
     }
 
-    constructor(public id: FrameId) {
-      super();
-    }
-    
-    /** Retrieves the length in bytes of all this frame*/
-    len(): number {
-      return 0;
-    };
-    
-    override serialize(bytes: Bytes): void {
-      bytes.write_u8(+this.id);
-    }
   }
-  export const FrameArray = StructArray(Frame);
-
-  export class Ping extends Frame {
-    constructor() {
-      super(new FrameId(FrameType.Ping, FrameFlags.None))
-    }
-    
-  }
-  export class Crypto extends Frame {
-    static index = 0;
-    constructor(flags: FrameFlags, private data: Bytes, private identifier = new VarId(Crypto.index++)) {
-      super(new FrameId(FrameType.Crypto, flags));
-    }
-    
-    override len(): number {
-      return 1 + new VarId(this.data.length()).byte_size() + this.identifier.byte_size() + this.data.length();
-    }
-    
-    override serialize(bytes: Bytes): void {
-      bytes.write_u8(+this.id);
-      this.identifier.serialize(bytes);
-      new VarId(this.data.length()).serialize(bytes);
-      bytes.write_slice(this.data.raw());
-    }
-
-    payload_len(){
-      return this.data.length();
-    }
-    
-    /**Returns a new ContentFrame but with data sliced to `amount` */
-    sliced(amount: number) {
-      return new Content(this.id.flags, this.data.slice_to(amount), this.identifier);
-    }
-  }
-  export class Content extends Struct implements Frame {
-    static index = 0;
-    id: FrameId;
-    constructor(flags: FrameFlags, private data: Bytes, private identifier = new VarId(Content.index++)) {
-      super()
-      this.id = new FrameId(FrameType.Content, flags);
-    }
-    len() {
-      return 1 + new VarId(this.data.length()).byte_size() + this.data.length();
-    }
-
-    payload_len() {
-      return this.data.length();
-    }
-
-    override serialize(bytes: Bytes): void {
-      bytes.write_u8(+this.id);
-      this.identifier.serialize(bytes);
-      new VarId(this.data.length()).serialize(bytes);
-      bytes.write_slice(this.data.raw());
-    }
-
-    /**Returns a new ContentFrame but with data sliced to `amount` */
-    sliced(amount: number) {
-      return new Content(this.id.flags, this.data.slice_to(amount), this.identifier);
-    }
-
-    content() {
-      return this.data.slice_to(this.data.length()).raw();
-    }
+  constructor(public id: FrameId) {
+    super();
   }
 
+  /** Retrieves the length in bytes of all this frame*/
+  len(): number {
+    return 0;
+  };
+
+  override serialize(bytes: Bytes): void {
+    bytes.write_u8(+this.id);
+  }
+}
+
+export const FrameArray = StructArray(Frame);
+
+
+export class Data extends Frame {
+  static index = 0;
+
+  constructor(flags: DataFlags, private data: Bytes, private identifier = new VarId(Data.index++)) {
+    super(new DataId(flags))
+    this.id = new DataId(flags);
+  }
+  override len() {
+    return 1 + new VarId(this.data.length()).byte_size() + this.identifier.byte_size() + this.data.length();
+  }
+
+  payload_len() {
+    return this.data.length();
+  }
+
+  override serialize(bytes: Bytes): void {
+    bytes.write_u8(+this.id);
+    this.identifier.serialize(bytes);
+    new VarId(this.data.length()).serialize(bytes);
+    bytes.write_slice(this.data.raw());
+  }
+
+  /**Returns a new ContentFrame but with data sliced to `amount` */
+  sliced(amount: number) {
+    return new Data(this.id.flags, this.data.slice_to(amount), this.identifier);
+  }
+
+  mark_fin(){
+    this.id.flags |= DataFlags.Fin;
+  }
+
+  content() {
+    return this.data.slice_to(this.data.length()).raw();
+  }
+}
+
+export const enum TransferParameterFlags {
+  WaitBase = 1 << 4,
+  MaxDatagramLength = 1 << 5,
+  MaxContentLength = 1 << 6,
+  HasKey = 1 << 7
+}
+
+export class TransferParameter extends Struct {
+  static override deserialize<T extends Struct, C extends abstract new (...args: any[]) => T>(this: C, bytes: Bytes): InstanceType<C> {
+    const flags = bytes.read_u8();
+    let key: Uint8Array | undefined;
+    if (flags & TransferParameterFlags.HasKey) key = bytes.slice_from_current_with_length(33).raw();
+    let max_content: number | undefined;
+    if (flags & TransferParameterFlags.MaxContentLength) max_content = bytes.read_u16();
+    let max_datagram_size = 8192; //default
+    if (flags & TransferParameterFlags.MaxDatagramLength) max_datagram_size = bytes.read_u32();
+    let wait_base = 2;
+    if (flags & TransferParameterFlags.WaitBase) wait_base = bytes.read_u8();
+    return new (this as any)(key, max_content, max_datagram_size, wait_base)
+  }
+  /** Create a new TransferParameters struct used to establish a handshake between 2 ends.
+    The provided `key` is the public key generated by ECDH curve25519 that will be used by the other end to retrieve the shared key.
+    The provided `max_content` determines how many contents can be sent from one end before receiving a Busy frame.
+    The provided `max_datagram_size`, if not provided, defaults to 8kb, is the max amount of size in bytes a datagram can have
+    The provided `wait_base`, if not provided, defaults to 2, is the base used to make the end wait `Ticks * WaitBase` ticks after receiving a busy frame to then try sending more data
+  */
+  constructor(public readonly key?: Uint8Array, public readonly max_content?: number, public readonly max_datagram_size: number = 8192, public readonly wait_base: number = 2) {
+    super();
+  }
+  override serialize(bytes: Bytes): void {
+    const cursor = bytes.advance_cursor(1);
+    let flags = 0;
+    if (this.key) {
+      flags |= TransferParameterFlags.HasKey;
+      bytes.write_slice(this.key);
+    }
+    
+    if (this.max_content !== undefined) {
+      flags |= TransferParameterFlags.MaxContentLength;
+      bytes.write_u16(this.max_content);
+    }
+    if(this.max_datagram_size !== 8192) {
+      flags |= TransferParameterFlags.MaxDatagramLength;
+      bytes.write_u32(this.max_datagram_size);
+    }
+    if(this.wait_base !== 2) {
+      flags |= TransferParameterFlags.WaitBase;
+      bytes.write_u8(this.wait_base);
+    }
+    bytes.write_u8_at(flags, cursor);
+  }
+  len(){
+    return (this.key?.byteLength ?? 0) +
+          (this.max_content !== undefined ? 2 : 0) +
+          (this.max_datagram_size !== 8192 ? 4 : 0) +
+          (this.wait_base != 2 ? 1 : 0) + 1
+  }
+}
+
+
+/** A frame used tp send specifically encrypted data, or atleast, related with it.*/
+export class Crypto extends Frame {
+  static index = 0;
+  /** Creates a new Crypto frame for sending TransportParameters. It's content will be the provided `parameters` serialized */
+  static transport(parameters: TransferParameter) {
+    const data = Bytes.new(parameters.len());
+    parameters.serialize(data);
+    data.reset_cursor();
+    return new Crypto(CryptoFlags.TransferParameters | CryptoFlags.Fin, data)
+  }
+  constructor(flags: CryptoFlags, private data: Bytes, private identifier = new VarId(Crypto.index++)) {
+    super(new CryptoId(flags));
+  }
+
+  override len(): number {
+    return 1 + new VarId(this.data.length()).byte_size() + this.identifier.byte_size() + this.data.length();
+  }
+
+  override serialize(bytes: Bytes): void {
+    bytes.write_u8(+this.id);
+    this.identifier.serialize(bytes);
+    new VarId(this.data.length()).serialize(bytes);
+    console.log(this.data.raw());
+    bytes.write_slice(this.data.raw());
+  }
+
+  payload_len() {
+    return this.data.length();
+  }
+
+  /**Returns a new ContentFrame but with data sliced to `amount` */
+  sliced(amount: number) {
+    console.log(amount, this.data.length());
+    return new Crypto(this.id.flags, this.data.slice_to(amount), this.identifier);
+  }
+
+  mark_fin() {
+    this.id.flags |= CryptoFlags.Fin;
+  }
+
+  /** Unsafe Function. This will retrieve a Transport Parameter from the bytes of this crypto frame. If it's not a transfer parameter, this might break
+  the code or get corrupted data*/
+  retrieve_transport(){
+    return TransferParameter.deserialize(this.data);
+  }
 }

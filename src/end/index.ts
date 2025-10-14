@@ -1,5 +1,5 @@
 export { EndPoint } from "./endpoint";
-export { Connection } from "./connection";
+export { StreamConnection, ListenerConnection } from "./connection";
 
 /**Generates an u32 hash value for the provided `name` using the current minute as key */ 
 export function gen_id(name:string) {

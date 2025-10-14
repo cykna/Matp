@@ -1,0 +1,40 @@
+{
+    "format_version": 2,
+    "header": {
+        "description": "Example vanilla behavior pack",
+        "name": "Addon1",
+        "uuid": "ee649bcf-256c-4013-9068-6a802b89d756",
+        "version": [1, 0, 0],
+        "min_engine_version": [1, 20, 0]
+    },
+    "modules": [
+        {
+            "description": "Example behavior pack module",
+            "type": "data",
+            "uuid": "fa6e90c8-c925-460f-8155-c8a60b753caa",
+            "version": [1, 0, 0]
+        },
+        {
+            "description": "Example client scripts module",
+            "language": "javascript",
+            "type": "script",
+            "entry": "scripts/main.js",
+            "uuid": "c05a992e-482a-455f-898c-58bbb4975e47",
+            "version": [1, 0, 0]
+        }
+    ],
+    "dependencies": [
+        {
+            "uuid": "66c6e9a8-3093-462a-9c36-dbb052165822",
+            "version": [1, 0, 0]
+        }, 
+        {
+            "module_name": "@minecraft/server",
+            "version": "2.3.0-beta"
+        },
+        {
+            "module_name": "@minecraft/debug-utilities",
+            "version": "1.0.0-beta"
+        }
+    ]
+}

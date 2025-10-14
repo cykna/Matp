@@ -11,12 +11,15 @@ export class VarId extends Struct{
   constructor(private raw:number) {
     super();
   }
-  write_on(bytes:Bytes) {
+  /** Defines the inner value to be the provided `raw` value */
+  set_raw(raw:number){
+    this.raw = raw;
+  }
+  override serialize(bytes:Bytes) {
     //doesnt have the hsb = 1
     if(this.raw < 0x7fff) bytes.write_u16(this.raw);
     else bytes.write_u32(this.raw | (1 << 31));
   }
-
   override valueOf(){
     if((this.raw & 0xffff) <= 0x7fff) return this.raw;
     else return this.raw & ~(1 << 31);

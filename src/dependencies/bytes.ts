@@ -141,6 +141,12 @@ export class Bytes {
   }
 
   /**Writes the given `num` on the specified index on this buffer. Note that this is unsafe and does not move the cursor*/
+  write_u8_at(num: number, cursor: number) {
+    this.view.setUint8(cursor, num);
+    this.cursor++;
+    return this;
+  }
+  /**Writes the given `num` on the specified index on this buffer. Note that this is unsafe and does not move the cursor*/
   write_u16_at(num: number, index: number) {
     this.view.setUint16(this.offset + index, num, false);
     return this;
@@ -207,18 +213,8 @@ export class Bytes {
 
   /** Writes the given `buf` on this and returns the amount of bytes that overflowed. */
   write_slice(buf: Uint8Array) {
-    const remaining = this.remaining();
-    if (buf.length > remaining) {
-      const amount = buf.length - remaining;
-      const slice = buf.subarray(0, amount);
-      this.raw().set(slice, this.cursor);
-      this.cursor += slice.length;
-      return buf.length - amount;
-    } else {
-      this.raw().set(buf, this.cursor);
-      this.cursor += buf.length;
-      return 0;
-    }
+    this.raw().set(buf, this.cursor);
+    this.cursor += buf.length;
   }
   /**Writes the given `str` on this byte slice. */
   write_string(str: string) {
