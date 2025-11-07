@@ -1,49 +1,46 @@
-import * as edch from "@noble/secp256k1";
-import { hkdf } from "@noble/hashes/hkdf";
-import { sha256 } from "@noble/hashes/sha256";
 import { Bytes } from "./dependencies/bytes";
 import { MatpStream } from "./end/stream";
 import { MatpListener } from "./end/listener";
 import { gen_id } from "./end";
-import { system } from "@minecraft/server";
-import { decode } from "base32768";
-import { MatpDatagram, MatpDatagramId } from "./content/headers";
+import { ButtonState, InputButton, system, world } from "@minecraft/server";
+import { Data } from "./content/frames/data";
+import { DataFlags } from "./content/ids";
 
-
-const salt = Bytes.from_string('encrypt-data').raw();
-const info = Bytes.from_string('matp').raw();
-
-globalThis.crypto = new class {
-
-  getRandomValues = function <T extends ArrayLike<number>>(arr: T) {
-    let i = arr.length;
-    while (i--) (arr as any)[i] = (Math.random() * 0xff) | 0;
-    return arr;
+const server = new MatpListener('jorge');
+server.addListener('on_client_content', conn => {
+  
+  for(const _ of server.flush()) {
+    console.warn("Eu escrevi");
   }
-  generate_encrypting_key(secret: Uint8Array, publik: Uint8Array, len = 32) {
-    const shared = edch.getSharedSecret(secret, publik);
-    return hkdf(sha256, shared, salt, info, len);
-  }
-} as any;
+});
+server.listen();
+  
+let clien:MatpStream;
 
-async function main() {
-
-  const server = new MatpListener('jorge');
-  server.addListener('on_client_content', conn => {
-    console.warn(conn.end);
-    server.write_blocking();
-  });
-  server.listen();
-
+world.afterEvents.worldLoad.subscribe(async _ => {
+  await system.waitTicks(5);
   const [client, handshake] = MatpStream.new_listening('pedro', {
-    max_wait_limit: 1,
+    max_wait_limit: 5,
     targets: ['jorge', 'henrique'],
-    blocking_thread: false
   });
   client.on('on_fail_handshake', console.warn);
   await handshake;
-  console.warn(client.connections.get(gen_id("jorge"))!.shared_key);
-  console.warn(server.connections.get(gen_id("pedro"))!.shared_key)
-
-}
-main();
+  try {
+    console.warn(client.connections.get(gen_id("jorge")), "oiaki");
+    console.warn(server.connections.get(gen_id("pedro")), "oiakio pedro");
+  }catch{}
+  clien = client;
+});
+const data = [new Data(DataFlags.None, Bytes.new(2048))];
+const amount = 3;
+world.afterEvents.playerButtonInput.subscribe(async ev => {
+  
+  if(ev.button === InputButton.Jump && ev.newButtonState === ButtonState.Pressed) {
+    const now = Date.now();
+    for(let i = 0; i < amount; i++) {
+      await clien.send(gen_id('jorge'), data);
+      for(const _ of clien.flush());
+    }
+    console.warn("Made", amount, "sends in", (Date.now() - now), "ms");
+  }
+})

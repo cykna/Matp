@@ -1,11 +1,12 @@
+import "../dependencies/crypto";
 import { gen_id, ListenerConnection, StreamConnection } from ".";
 import { Bytes } from "../dependencies/bytes";
-
 import { MatpDatagram, MatpDatagramId, } from "../content/headers";
-
 import EventEmitter from "eventemitter3";
 import { system } from "@minecraft/server";
-import { encode } from "base32768";
+import { encode } from "../dependencies/string_encoder";
+import { MAX_DATAGRAM_SIZE } from "../dependencies/constants";
+import "../content/helper";
 
 export type EndPointRecv = { message: string; id: string };
 
@@ -26,7 +27,7 @@ export abstract class EndPoint extends EventEmitter<EndPointEvents> {
   
   id: number;
   id_bytes = Bytes.new(256);
-  buffer: Bytes = Bytes.new(8192);
+  buffer: Bytes = Bytes.new(MAX_DATAGRAM_SIZE);
   datagram: MatpDatagram;
 
   constructor(id: string) {
@@ -52,7 +53,10 @@ export abstract class EndPoint extends EventEmitter<EndPointEvents> {
   /** Yields the enqueued data as already to send Datagrams in binary form as well as the correspondent ID for it. This is a generator because this can generate more than a single Datagram to be sent dependending on the sizes of the content being sent and the max amount the receiver expects
     Note that when sending to an end, the bytes must be converted to string. After sending, clears all content to be ready to send new data on a next write*/
   *flush() {
-    if(this.datagram.length > 0) for(const [datagram, id] of this.flush_multiple()) yield system.sendScriptEvent('matp:'+encode(id), encode(datagram));
+    if(this.datagram.length > 0)
+    for(const [datagram, id] of this.flush_multiple()){
+      yield system.sendScriptEvent('matp:'+encode(id), encode(datagram));
+    }
     this.buffer.reset_cursor();
   }
 

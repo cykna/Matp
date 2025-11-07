@@ -101,9 +101,15 @@ export abstract class Struct {
   static deserialize<T extends Struct, C extends abstract new (...args: any[]) => T>(this: C, bytes: Bytes): InstanceType<C> {
     const out = new (this as any);
     const fields = this.fields;
+    console.warn("desserializando ", bytes.raw())
     for (const field of this.field_names) {
       const field_type = fields[field] as FieldType | typeof Struct;
-      out[field] = typeof field_type === 'number' ?retrieve_value_from(field_type, bytes) : field_type.deserialize(bytes);
+      try {
+        out[field] = typeof field_type === 'number' ? retrieve_value_from(field_type, bytes) : field_type.deserialize(bytes);
+      }catch(e){
+        console.error(e, "falhou no field", field);
+      }
+      
     }
     return out;
   }

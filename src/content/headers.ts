@@ -3,6 +3,7 @@ import { Field, FieldType, Struct } from "../dependencies/struct";
 import { DeserializeArr, StructArray } from "../dependencies/struct_arr";
 
 import { Frame, FrameArray, FrameType } from "./frame";
+import type { Crypto } from "./frames";
 import { VarId } from "./varid";
 
 export const enum MatpContentFlags {
@@ -25,7 +26,7 @@ export class MatpDatagramTarget extends Struct {
 }
 
 export class MatpDatagramId extends StructArray(MatpDatagramTarget) {
-  static override deserialize(bytes: Bytes): StructArray | undefined {
+  static override deserialize(bytes: Bytes): MatpDatagramId | undefined {
     const len = VarId.deserialize(bytes);
     const sender = bytes.read_u32();
     const arr = DeserializeArr(MatpDatagramTarget, bytes);
@@ -133,7 +134,8 @@ export class MatpDatagram extends MatpContents {
     const content = new MatpContent(for_handshake ? MatpContentFlags.IsHandshake : MatpContentFlags.None);
     this.push(content);
     content.frames.push(...frames);
-    this.id.push(new MatpDatagramTarget(target, new VarId(0)))
+    this.id.push(new MatpDatagramTarget(target, new VarId(0)));
+    
     return content;
   }
 

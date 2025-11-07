@@ -6,7 +6,7 @@ export class FrameId {
   static from(byte: number) {
     return new this((byte & 0b11110000) >> 4, byte & 0b1111);
   }
-  constructor(public readonly ty: FrameType, public readonly flags: number) { }
+  constructor(public readonly ty: FrameType, public flags: number) { }
   valueOf() {
     return (this.ty << 4) | this.flags;
   }

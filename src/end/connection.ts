@@ -1,11 +1,13 @@
 import { xchacha20poly1305 } from "@noble/ciphers/chacha.js"
 import { keygen, getSharedSecret } from "@noble/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
-import { Crypto, Frame, FrameType, TransferParameter } from "../content/frame";
+import { Frame, FrameType} from "../content/frame";
+import {Crypto, TransferParameter} from "../content/frames/crypto";
 import { MatpContent } from "../content/headers";
 import { hkdf } from "@noble/hashes/hkdf";
 import { Bytes } from "../dependencies/bytes";
 import type { CipherWithOutput } from "@noble/ciphers/utils.js";
+import { MAX_DATAGRAM_SIZE } from "../dependencies/constants";
 
 
 
@@ -19,7 +21,7 @@ export class ConnectionConfig {
 
   public readonly public_key: Uint8Array;
   public readonly private_key: Uint8Array;
-  public max_datagram_size = 8192;
+  public max_datagram_size = MAX_DATAGRAM_SIZE;
   public wait_base = 2;
   constructor(key: Uint8Array) {
     if (key.length < 64) throw new Error("Key must have at least 64 bytes");
@@ -111,9 +113,7 @@ export class StreamConnection {
   /** Creates a new connection and returns it as well as a promise that will resolve only when the connection receives a handshake */
   static new(end: number, config: ConnectionConfig): [StreamConnection, Promise<void>] {
     const out = new StreamConnection(end, config);
-    const promise = new Promise(ok => {
-      out.promise = ok;
-    });
+    const promise = new Promise(ok => (out.promise = ok));
     return [out, promise as any]
   }
   protected shared_key = new Uint8Array(32);

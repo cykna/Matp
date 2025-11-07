@@ -4,7 +4,7 @@ import { MatpContent, MatpDatagramId } from "../content/headers";
 import { Bytes } from "../dependencies/bytes";
 import { ConnectionConfig, ListenerConnection } from "./connection";
 import { EndPoint, type EndPointRecv } from "./endpoint";
-import { decode } from "base32768";
+import { decode } from "../dependencies/string_encoder";
 
 
 export class MatpListener extends EndPoint {
@@ -22,6 +22,7 @@ export class MatpListener extends EndPoint {
     const flag = this.connections.has(target);
     if (!flag) throw new Error(`Must stablish a connection with the provided target before sending data`);
     const content = this.datagram.create_content(target, data, handshake);
+    
     return content;
   }
   /** Retrieves a connection with a sender with given `sender` id. If no connection, then one is created */
@@ -40,11 +41,20 @@ export class MatpListener extends EndPoint {
       const id = MatpDatagramId.deserialize(new Bytes(id_content.buffer as any)) as MatpDatagramId;
 
       for (const target of id) {
+        
+
         if (target.target === this.id) {
+          
           const connection = this.retrieve_connection_with(id.sender);
-          const bytes = new Bytes(decode(event.message).buffer as any, +target.position);
+          let bytes = decode(event.message);
+          bytes.advance_cursor(+target.position);
+          bytes = bytes.slice_from_current_with_length(bytes.length() - bytes.cursor);
           {
-            const content = MatpContent.deserialize(bytes);
+            
+            
+            let content;
+            try {const cont= MatpContent.deserialize(bytes); content = cont;}catch(e){console.error(e); throw e};
+            
             if (content.is_handshake()) connection.recv_handshake(content)
             else connection.recv_normal(content);
             if (connection.has_pending_handshake()) {
@@ -56,7 +66,7 @@ export class MatpListener extends EndPoint {
               this.send(id.sender, connection.frames(), false);
               connection.reset_frames();
             }
-
+            break;
           }
         }
       }
@@ -69,7 +79,6 @@ export class MatpListener extends EndPoint {
     const self = this;
     system.afterEvents.scriptEventReceive.subscribe(function(ev) {
       self.emit('on_recv', ev);
-
       self.recv(ev);
     })
   }

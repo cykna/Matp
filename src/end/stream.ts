@@ -5,12 +5,12 @@ import { ConnectionConfig, StreamConnection } from "./connection";
 import { EndPoint, type EndPointRecv } from "./endpoint";
 import type { Frame } from "../content/frame";
 import { system } from "@minecraft/server";
-import { decode } from "base32768";
+import { decode } from "../dependencies/string_encoder";
 
 export interface StreamCreationOptions {
   max_wait_limit: number;
   targets: string[];
-  blocking_thread: boolean
+ 
 }
 
 export class MatpStream extends EndPoint {
@@ -21,7 +21,6 @@ export class MatpStream extends EndPoint {
       const handshake = stream.start_handshake(gen_id(t));
       return Promise.race([system.waitTicks(options.max_wait_limit).then(err), handshake.then(ok)]);
     }));
-    system.runJob(stream.flush());
 
     return [
       stream,
@@ -43,13 +42,11 @@ export class MatpStream extends EndPoint {
   static new_listening(id: string, options:StreamCreationOptions): [MatpStream, Promise<MatpStream>] {
     
     const stream = new MatpStream(id);
-    stream.listen();
     const promises = options.targets.map(t => new Promise((ok, err) => {
       const handshake = stream.start_handshake(gen_id(t));
       return Promise.race([system.waitTicks(options.max_wait_limit).then(err), handshake.then(ok)]);      
     }));
-    if(options.blocking_thread) for(const _ of stream.flush());
-    else system.runJob(stream.flush());
+    stream.listen();
 
     return [
       stream,
@@ -57,11 +54,11 @@ export class MatpStream extends EndPoint {
       .then(results => {
         let i = 0;
         for (const result of results) {
+          
           if (result.status === "rejected") {
             stream.emit('on_fail_handshake', options.targets[i]!);
-            stream.connections.delete(gen_id(options.targets[i]!))
+            stream.connections.delete(gen_id(options.targets[i]!));
           }
-
           i++
         }
       })
@@ -103,7 +100,8 @@ export class MatpStream extends EndPoint {
     if (this.connections.has(target)) throw new Error(`A connection with the provided target of id ${target} already exists`);
     const [conn, out] = StreamConnection.new(target, ConnectionConfig.new_with_random_key());
     this.connections.set(target, conn);
-    this.send(target, conn.retrieve_handshake_frames(), true);
+    this.datagram.create_content(target, conn.retrieve_handshake_frames(), true);
+    for(const _ of this.flush());;
     return await out;
   }
 
@@ -113,7 +111,6 @@ export class MatpStream extends EndPoint {
       const id = MatpDatagramId.deserialize(new Bytes(id_content.buffer as any)) as MatpDatagramId;
 
       for (const target of id) {
-
         if (target.target === this.id) {
           const connection = this.connections.get(id.sender);
           if (!connection) return;
@@ -136,8 +133,8 @@ export class MatpStream extends EndPoint {
   /** Starts listening to incomming messages from servers */
   listen() {
     system.afterEvents.scriptEventReceive.subscribe(ev => {
-      this.emit('on_recv', ev);
-      this.recv(ev)
+            this.emit('on_recv', ev);
+      this.recv(ev);
     })
   }
 }

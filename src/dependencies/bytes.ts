@@ -5,14 +5,14 @@ export class Bytes {
   }
 
   static from_string(str: string) {
-    const out = Bytes.new(str.length * 2);
+    const out = Bytes.new(str.length<<1);
     out.write_string(str);
     return out.slice_to_written();
   }
 
   view: DataView;
   cursor = 0;
-  constructor(private buffer: ArrayBuffer, private offset: number = 0, private len?: number) {
+  constructor(private buffer: ArrayBuffer, private len=buffer.byteLength, private offset = 0)  {
     this.view = new DataView(buffer);
   }
 
@@ -29,22 +29,22 @@ export class Bytes {
 
   /** Returns a new slice containing only the contents written */
   slice_to_written() {
-    return new Bytes(this.buffer, this.offset, this.cursor);
+    return new Bytes(this.buffer, this.cursor, this.offset);
   }
 
   /**Equivalent to slice[cursor..cursor+amount] */
   slice_to(amount: number) {
-    return new Bytes(this.buffer, this.offset, amount);
+    return new Bytes(this.buffer, amount, this.offset);
   }
 
   /** Slices from `start` until `end`. Note that it does have nothing to do with the cursor */
   slice(start: number, end: number) {
-    return new Bytes(this.buffer, this.offset + start, end - start);
+    return new Bytes(this.buffer, end - start,this.offset + start);
   }
 
   /** Returns a new Slice that starts from the current cursor position and ends at `len`. Moves the cursor by `len` bytes*/
   slice_from_current_with_length(len: number) {
-    const out = new Bytes(this.buffer, this.offset + this.cursor, len);
+    const out = new Bytes(this.buffer, len, this.offset + this.cursor);
     this.cursor += len;
     return out;
   }
@@ -113,13 +113,6 @@ export class Bytes {
     return out;
   }
 
-  /** Reads the Head byte as half precision float and advances the cursor */
-  read_f16() {
-    const out = this.view.getFloat16(this.offset + this.cursor);
-    this.cursor += 2;
-    return out;
-  }
-
   /** Reads the Head byte as single precision float and advances the cursor */
   read_f32() {
     const out = this.view.getFloat32(this.offset + this.cursor, false);
@@ -185,13 +178,6 @@ export class Bytes {
     this.cursor += 4; return this;
   }
 
-  /**Writes the given `num` at the cursor position and advances 2 bytes*/
-  write_f16(num: number) {
-    this.view.setFloat16(this.offset + this.cursor, num);
-    this.cursor += 2;
-    return this;
-  }
-
   /**Writes the given `num` as u16 at the cursor position and advances 4 bytes*/
   write_f32(num: number) {
     this.view.setFloat32(this.offset + this.cursor, num, false);
@@ -213,13 +199,14 @@ export class Bytes {
 
   /** Writes the given `buf` on this and returns the amount of bytes that overflowed. */
   write_slice(buf: Uint8Array) {
+    
     this.raw().set(buf, this.cursor);
     this.cursor += buf.length;
   }
   /**Writes the given `str` on this byte slice. */
   write_string(str: string) {
     let code = 0;
-    for (let i = 0, len = str.length; i < len; i++) {
+    for (let i = 0; i < str.length; i++) {
       code = str.charCodeAt(i);
       if (code > 0xff) this.write_u16(code);
       else this.write_u8(code);

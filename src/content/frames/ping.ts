@@ -1,4 +1,5 @@
-import { Frame, FrameId, FrameType } from "../frame";
+import { Frame, FrameType } from "../frame";
+import { FrameId } from "../ids"; 
 
 export class Ping extends Frame {
   constructor() {
