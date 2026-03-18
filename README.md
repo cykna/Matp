@@ -53,13 +53,13 @@ This might and will generate multiple responses to the client, and this is intee
 
 On sending the data, a Content, it will contain some information about the contents inside them. We can imagine this as a Box with a huge amount of letters, eache letter has it's contents.
 A dragram will have it's header as the following:
-[1Bit:MultipleTarges][7Bit:Unused][4Bytes:Sender]
+`[1Bit:MultipleTarges][7Bit:Unused][4Bytes:Sender]`
 
 The MultipleTargets bit determines if the payload is sent to more than a single end at once.
 
 The Content, is equivalent to the letter said before. It will have information about who the data is being sent to, as well as more information about the content itself, such as flags and the data.
 
-By this it can be understood as [1Bit:IsHandshake][7Bit:Unused][4Bytes:Receiver]
+By this it can be understood as `[1Bit:IsHandshake][7Bit:Unused][4Bytes:Receiver]`
 The IsHandshake bit determines if the content being sent is used to stablish a handshake.
 The Receiver bytes determines who this is being sent to.
 
@@ -75,7 +75,7 @@ Note that as they are one end to another, the values in here are at connection l
 
 Each Frame has an type, then, a frame can be understood as:
 
-[4Bit:Type][4Bit:ReservedForType][PerTypePayload]
+`[4Bit:Type][4Bit:ReservedForType][PerTypePayload]`
 
 The Type determines the type of the frame.
 
@@ -93,7 +93,7 @@ These must be encrypted always with the data provided on the handshake, the only
 
 New values that determine how data is encrypted will be sent, so if a Client sends a new key, the server adopts it and on responses uses that new key to encrypt data.
 
-Can be seen as: [4Bit=2][1Bit:FIN][1Bit:Encrypted][2Bit:TypeOfData][VarID:ID][VarID:Length][Length:Payload]
+Can be seen as: `[4Bit=2][1Bit:FIN][1Bit:Encrypted][2Bit:TypeOfData][VarID:ID][VarID:Length][Length:Payload]`
 
 The Encrypted Bit must be 1 if the header it is at is 1 as well, and MUST be 0 only at handshakes.
 
@@ -108,7 +108,7 @@ A Crypto frame with Transport parameters MUST be sent without any kind of fragme
 
 This is used to send data to one end to another, not necessarily to send encrypted data.
 
-Can be visualized as: [4Bit=3][1Bit:FIN][1Bit:Encrypted][2Bit:Compression][VarID:ID][VarID:Length][Length:Payload]
+Can be visualized as: `[4Bit=3][1Bit:FIN][1Bit:Encrypted][2Bit:Compression][VarID:ID][VarID:Length][Length:Payload]
 
 The FIN bit determines weather this is the last content that was sent
 
@@ -116,7 +116,7 @@ The encrytped bit determines if the content was encrypted, if so, uses the key b
 
 The Compression bits determine the type of compression
 #### 4.1.4: CloseConnection:
-Used only to determine that the connection is being ended with some aditional data. [4Bit=4][1Bit=Encrypted][3Bit:Content][VarID:Length][Length:Payload][VarID?:Length2][Length2?:Payload2]
+Used only to determine that the connection is being ended with some aditional data. `[4Bit=4][1Bit=Encrypted][3Bit:Content][VarID:Length][Length:Payload][VarID?:Length2][Length2?:Payload2]
 
 Encrypted determines if the content is encrypted, MUST be 1 if the header determines so.
 
@@ -130,17 +130,17 @@ Requesting the handshake already had established a connection before. So, if no 
 
 The order on bytes is defined respectively to how they're listed on here, so on a 0b111, NewKey, Reason, TransferParameters will be sent in this order. 
 
-[VarID:KeyLen][KeyLen:Key][VarID:MsgLen][MsgLen:Reason][Parameters]
+`[VarID:KeyLen][KeyLen:Key][VarID:MsgLen][MsgLen:Reason]]`
 		
 * BusyFrame: 5
 	    Sent Specifically to tell A target to wait this end to finalize so it can send dsta again. The end waiting here.
-	    [Type=5][4Bit=MinTickAmount]
+	    `[]]`
 	    MinTickAmount is the minimum time in Ticks this end is requesting the receiver to wait before sending data. Note that the value is WaitBase*N
 * SendBack: 6
 		Used to tell the receiver that it can start send back new contents for the sender. Normally provided after a BusyFrame.
 * LostData: 7
 	    Used to tell an end thst the content of the message with the given id was lost and it might send it back
-		[Type=7][4Bits:MaxWaitTicks][ID:VarID]
+		`Type=7][4Bits:MaxWaitTicks]]`
 	    MaxWaitTicks is used to track the amount of ticks this peer will wait for a resend until it simply ignores all the content lost, if there was some, the formula is: WaitBase*MaxWaitTicks.
 	    ID is the ID of the message sent, so the end must resent the content back.
 	    If the time expires, a LostMessage error is sent back and the sender of the LostMessage error will increase it's error count for tje receiver, if it exceeds MaxLostFrame, then the connection is closed as talked on 5
@@ -148,18 +148,18 @@ The order on bytes is defined respectively to how they're listed on here, so on 
 	     Cache frames follow the same rules as Content, but they differ because they got Key with them.
   		This Key is a numeric value to determine which resposne to use. This is used to do not need to recalculate things over and over. The key os 2 byte. The actual value of the key is 12bits, leading to 4092 possibilities, and the last 4bits are used to track how many ticks it will be accepted. After that, that key with that given slot is freed and opened to another one to use.
 	     Can be seen as:
-	     [4Bit=8][1Bit:FIN][1Bit:Encrypted][2Bit:Encrypted][2Byte:CacheKey][VarID:Length][Length:Payload]
+	     `[4Bit=8][1Bit:FIN][1Bit:Encrypted][2Bit:Encrypted][2Byte:CacheKey][VarID:Length][Length:Payload]`
 	     Both ends MUST keep track of the cache, the sender(of the response) in case, MUST get track only the Key, so it can know if the contents can be cached with that key or not.
 	     The receiver(of the response) MUST keep track of the cache key, and the content, so it do not resend dsta over and over again, in fact, don't rven send data
 	     
 	 Error 15
 	     The Hsb must be 1 to determine if its an error. If so, the others 3 bits determine the type of the error as discussed on 5
-	     [4Bit=15][1Bit:ContainReason][3Bit:ErrorType][VarId:Len][Len:Reason]
+	     `[4Bit=15][1Bit:ContainReason][3Bit:ErrorType][VarId:Len][Len:Reason]
 	     More talked in 5. The reason is a non encrypted text containing non Internal data about the error and its reason.
 		
 ### 4.2 Transfer Parameters:
 Transport parameters are values used to both connections to agree with. A Transport parameter will be sent on crypto frames, and will be as the following:
-    [1Bit:Key][1Bit:MaxContentLength][1Bit:MaxDataPerDatagram][1Bit:WaitBase][4Bit:Unused][32Bytes:Key][2Bytes:MaxContentLength][4Bytes:MaxDatagramSize][1Byte:WaitBase]
+    `1Bit:Key][1Bit:MaxContentLength][1Bit:MaxDataPerDatagram][1Bit:WaitBase][4Bit:Unused][32Bytes:Key][2Bytes:MaxContentLength][4Bytes:MaxDatagramSize]]`
     The first byte defines flags. If Key, then theres key, same for others.
     Key determines The that public key the sender will use. The receiver will use the provided key to calculate the shared key and then send back the public key, so the next encrypted content will be made using the shared key
     MaxContentLength is the max of contents the end can receive and keep processing while in queue. This must be global and used to avoid that a client talking to other servers receive too much responses. A client will have a queue of responses, if its full, thus, the size is equal to this MaxContentLength, on receiving new responses, it will send back a BusyFrame, telling the server to stop sending the client until a SendBack frame is received. The packet isn't lost, but new ones after the BusyFrame will be
