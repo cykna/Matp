@@ -9,19 +9,35 @@ Terms:
 
 ## 1. Basics
 #### 1.1 IDs
-When sending data from one addon to another, this one must contain some kine of id used to get track the sender and the one expected to receive the content. This Id should fit in 3 Bytes and generated on entrance on the world, in this way, the ids can and will be randomic, but yet, able to be known by every other addons. How the 3 bytes Id are generated doesn't need to be known, only the final "address". Then, the sharing of IDs to generate address and the way to generate them is not part of this protocol but, addons MUST have a way to know ahead of time how to generate others addons addresses to be able to communicate, this can be on their API specification, a hardcoded value or whatever. The default implementation that an implementor may follow is to use CRC16 to generate these addresses, but not obligatory as long as others know it's ID.
+When sending data from one addon to another, this one must contain some kine of id used to get track the sender and the one expected to receive the content.
+
+This Id should fit in 3 Bytes and generated on entrance on the world, in this way, the ids can and will be randomic, but yet, able to be known by every other addons.
+How the 3 bytes Id are generated doesn't need to be known, only the final "address". Then, the sharing of IDs to generate address and the way to generate them is not part of this protocol but, addons MUST have a way to know ahead of time how to generate others addons addresses to be able to communicate, this can be on their API specification, a hardcoded value or whatever.
+
+The default implementation that an implementor may follow is to use CRC16 to generate these addresses, but not obligatory as long as others know it's ID.
 The address will be part of the content sent, since this is for minecraft and using scriptevent calls, the ID of a message is follows as b"matp:"[SENDER][CONTENT], where SENDER is a 3 byte address.
+
 #### 1.2 Datagram packing
+
 When sending the data we will want to read/write data in binary, but minecraft only supports strings, so implementors MUST convert a Datagram to Utf16 string by packing each 2 bytes into 1 char, and the same way when receiving a Datagram, they MUST be able, but not obligatory to, read it as a packed byte array.
-The focus of this protocol is to send data to other addons in a reliable way evicting the less amount of scriptevent calls possible. For so, the default max Datagram size is of 8Kb, but each connection may be able to send more if all the targets agree with so on a multitarget message, or if the specific target agrees on a single target one.
+
+The focus of this protocol is to send data to other addons in a reliable way evicting the less amount of scriptevent calls possible.
+
+For so, the default max Datagram size is of 8Kb, but each connection may be able to send more if all the targets agree with so on a multitarget message, or if the specific target agrees on a single target one.
 
 #### 2 Handshake
 When an addon initializes, it might be able to request a handshake to another one, this is made using Handshake Datagrams.
+
 These are normal datagrams that as specificed to determine the handshake of ends. To initialize the content, a client sends it's data to the target, if after a certain time, this choosen by the client, no response was given, the handshake fails and a NoTarget error is returned. 
+
 On the handshake encrypted data is sent, the function to do so must be based on both end IDs to share the initial contents safely. The methods are talked better on 6.
+
 The handshake MUST contain TransferParameters which includes the maximum Datagram size accepted, the key the sender will use to send more encrypted data later. Talked better on 4.2.
+
 When the receptor receives this content, it sends back it's data and the handshake is stablished where each addon knows the parameters of each other.
+
 When failing the handshake, if so, an addon MUST be able to try again about N times, then, a Retry header will have the same as before.
+
 The handshake between 2 ends can be seen as:
 
 Client ----> [Server1,Server2,Server3]
@@ -34,6 +50,7 @@ Client <---- [Server1,Server3]
 This might and will generate multiple responses to the client, and this is inteended, since the client MUST know or implement a way to handle multiple responses at a time, which can be handled separatedly with promises.
 
 #### 3 Headers
+
 On sending the data, a Content, it will contain some information about the contents inside them. We can imagine this as a Box with a huge amount of letters, eache letter has it's contents.
 A dragram will have it's header as the following:
 [1Bit:MultipleTarges][7Bit:Unused][4Bytes:Sender]
@@ -41,59 +58,95 @@ A dragram will have it's header as the following:
 The MultipleTargets bit determines if the payload is sent to more than a single end at once.
 
 The Content, is equivalent to the letter said before. It will have information about who the data is being sent to, as well as more information about the content itself, such as flags and the data.
+
 By this it can be understood as [1Bit:IsHandshake][7Bit:Unused][4Bytes:Receiver]
 The IsHandshake bit determines if the content being sent is used to stablish a handshake.
 The Receiver bytes determines who this is being sent to.
 
-On the receiver side, if some header determines if it's encrypted or compressed, the other side must know how to decrypt and/or decompress the content sent. The order MUST be Compression -> Encryption, and compression SHOULD be used only and only when some Frame size is >2kb to not generate too much work. This is not obligatory, but an recommendation an implementor can ignore. 
+On the receiver side, if some header determines if it's encrypted or compressed, the other side must know how to decrypt and/or decompress the content sent.
+
+The order MUST be Compression -> Encryption, and compression SHOULD be used only and only when some Frame size is >2kb to not generate too much work.
+
+This is not obligatory, but an recommendation an implementor can ignore. 
 #### 4 Frames
-Frames on MATP are values that can be shared between one end to another, then we understand them as the read content that will be sent. Note that as they are one end to another, the values in here are at connection level, so no a client should not break another one, as theyre seem as independents.
+Frames on MATP are values that can be shared between one end to another, then we understand them as the read content that will be sent.
+
+Note that as they are one end to another, the values in here are at connection level, so no a client should not break another one, as theyre seem as independents.
+
 Each Frame has an type, then, a frame can be understood as:
+
 [4Bit:Type][4Bit:ReservedForType][PerTypePayload]
+
 The Type determines the type of the frame.
+
 The 4 bits are reserved for type that may content data in size of 4 bits.
+
 ### 4.1 Types:
 #### 4.1.1:Ping:
+
 Of Type 1, is used to send data and track if the other addon is still receiving data. No Payload and ReservedForType is unused.
 
-####4.1.2:Crypto:
-Of type 2, is used to send data used specifically to determine data about cryptography ajd parameters. These must be encrypted always with the data provided on the handshake, the only case when not, is during the handshake it self.
-		New values that determine how data is encrypted will be sent, so if a Client sends a new key, the server adopts it and on responses uses that new key to encrypt data.
-		Can be seen as: [4Bit=2][1Bit:FIN][1Bit:Encrypted][2Bit:TypeOfData][VarID:ID][VarID:Length][Length:Payload]
-		The Encrypted Bit must be 1 if the header it is at is 1 as well, and MUST be 0 only at handshakes.
-		The Fin bit determines if this Frame contains all the data required to finalize. If not, the contents are enqueued until it arrives until timeout.
-		TypeOfData determines the type of data being sent: 0 for Keys, 1 for Transferation Parameters, 2 for content and 3 used later. On receiving a Key, it's understood that the one requesting the handshake already had established a connection before. So, if no NoKey error is received, then the sender confirmed the key and established the connection.
-		A Crypto frame with Transport parameters MUST be sent without any kind of fragmentation
+#### 4.1.2:Crypto:
+Of type 2, is used to send data used specifically to determine data about cryptography ajd parameters.
+
+These must be encrypted always with the data provided on the handshake, the only case when not, is during the handshake it self.
+
+New values that determine how data is encrypted will be sent, so if a Client sends a new key, the server adopts it and on responses uses that new key to encrypt data.
+
+Can be seen as: [4Bit=2][1Bit:FIN][1Bit:Encrypted][2Bit:TypeOfData][VarID:ID][VarID:Length][Length:Payload]
+
+The Encrypted Bit must be 1 if the header it is at is 1 as well, and MUST be 0 only at handshakes.
+
+The Fin bit determines if this Frame contains all the data required to finalize. If not, the contents are enqueued until it arrives until timeout.
+
+TypeOfData determines the type of data being sent: 0 for Keys, 1 for Transferation Parameters, 2 for content and 3 used later.
+On receiving a Key, it's understood that the one requesting the handshake already had established a connection before. So, if no NoKey error is received, then the sender confirmed the key and established the connection.
+
+A Crypto frame with Transport parameters MUST be sent without any kind of fragmentation
+
 #### 4.1.3: Data:
+
 This is used to send data to one end to another, not necessarily to send encrypted data.
-		Can be visualized as: [4Bit=3][1Bit:FIN][1Bit:Encrypted][2Bit:Compression][VarID:ID][VarID:Length][Length:Payload]
-		The FIN bit determines weather this is the last content that was sent
-		The encrytped bit determines if the content was encrypted, if so, uses the key between both ends
-		The Compression bits determine the type of compression
+
+Can be visualized as: [4Bit=3][1Bit:FIN][1Bit:Encrypted][2Bit:Compression][VarID:ID][VarID:Length][Length:Payload]
+
+The FIN bit determines weather this is the last content that was sent
+
+The encrytped bit determines if the content was encrypted, if so, uses the key between both ends
+
+The Compression bits determine the type of compression
 #### 4.1.4: CloseConnection:
-Used only to determine that the connection is being ended with some aditional data.
-		[4Bit=4][1Bit=Encrypted][3Bit:Content][VarID:Length][Length:Payload][VarID?:Length2][Length2?:Payload2]
-		Encrypted determines if the content is encrypted, MUST be 1 if the header determines so.
-		Content determines the kind of content being sent. Its a bitflag with tje following types: 
-			1 NewKey, used for both ends on new connection stablishment, so on next handshake both will use the provided key. 
-requesting the handshake already had established a connection before. So, if no 2 Reason, a message containing the reason it ended. NoKey error is received, then the sender confirmed the key and established the connection.
-			4: Transfer Parameters
-		The order on bytes is defined respectively to how they're listed on here, so on a 0b111, NewKey, Reason, TransferParameters will be sent in this order. 
-		[VarID:KeyLen][KeyLen:Key][VarID:MsgLen][MsgLen:Reason][Parameters]
-	BusyFrame: 5
+Used only to determine that the connection is being ended with some aditional data. [4Bit=4][1Bit=Encrypted][3Bit:Content][VarID:Length][Length:Payload][VarID?:Length2][Length2?:Payload2]
+
+Encrypted determines if the content is encrypted, MUST be 1 if the header determines so.
+
+Content determines the kind of content being sent. Its a bitflag with tje following types: 
+
+1 NewKey, used for both ends on new connection stablishment, so on next handshake both will use the provided key. 
+
+Requesting the handshake already had established a connection before. So, if no 2 Reason, a message containing the reason it ended. NoKey error is received, then the sender confirmed the key and established the connection.
+
+### 5: Transfer Parameters
+
+The order on bytes is defined respectively to how they're listed on here, so on a 0b111, NewKey, Reason, TransferParameters will be sent in this order. 
+
+[VarID:KeyLen][KeyLen:Key][VarID:MsgLen][MsgLen:Reason][Parameters]
+		
+* BusyFrame: 5
 	    Sent Specifically to tell A target to wait this end to finalize so it can send dsta again. The end waiting here.
 	    [Type=5][4Bit=MinTickAmount]
 	    MinTickAmount is the minimum time in Ticks this end is requesting the receiver to wait before sending data. Note that the value is WaitBase*N
-	SendBack: 6
+* SendBack: 6
 		Used to tell the receiver that it can start send back new contents for the sender. Normally provided after a BusyFrame.
-	LostData: 7
+* LostData: 7
 	    Used to tell an end thst the content of the message with the given id was lost and it might send it back
-	    [Type=7][4Bits:MaxWaitTicks][ID:VarID]
+		[Type=7][4Bits:MaxWaitTicks][ID:VarID]
 	    MaxWaitTicks is used to track the amount of ticks this peer will wait for a resend until it simply ignores all the content lost, if there was some, the formula is: WaitBase*MaxWaitTicks.
 	    ID is the ID of the message sent, so the end must resent the content back.
 	    If the time expires, a LostMessage error is sent back and the sender of the LostMessage error will increase it's error count for tje receiver, if it exceeds MaxLostFrame, then the connection is closed as talked on 5
-	 Cache 8:
-	     Cache frames follow the same rules as Content, but they differ because they got Key with them. This Key is a numeric value to determine which resposne to use. This is used to do not need to recalculate things over and over. The key os 2 byte. The actual value of the key is 12bits, leading to 4092 possibilities, and the last 4bits are used to track how many ticks it will be accepted. After that, that key with that given slot is freed and opened to another one to use.
+* Cache 8:
+	     Cache frames follow the same rules as Content, but they differ because they got Key with them.
+  		This Key is a numeric value to determine which resposne to use. This is used to do not need to recalculate things over and over. The key os 2 byte. The actual value of the key is 12bits, leading to 4092 possibilities, and the last 4bits are used to track how many ticks it will be accepted. After that, that key with that given slot is freed and opened to another one to use.
 	     Can be seen as:
 	     [4Bit=8][1Bit:FIN][1Bit:Encrypted][2Bit:Encrypted][2Byte:CacheKey][VarID:Length][Length:Payload]
 	     Both ends MUST keep track of the cache, the sender(of the response) in case, MUST get track only the Key, so it can know if the contents can be cached with that key or not.
