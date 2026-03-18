@@ -1,21 +1,21 @@
 # matp
 
-Matp - Minecraft Addons Transfer Protocol
+## Matp - Minecraft Addons Transfer Protocol
 
 Terms:
 	Datagram: The binary content being sent via scriptevent
 	Content: Data send specifically to one End
 	End: An addon that can receive content
 
-1. Basics
-1.1 IDs
+## 1. Basics
+#### 1.1 IDs
 When sending data from one addon to another, this one must contain some kine of id used to get track the sender and the one expected to receive the content. This Id should fit in 3 Bytes and generated on entrance on the world, in this way, the ids can and will be randomic, but yet, able to be known by every other addons. How the 3 bytes Id are generated doesn't need to be known, only the final "address". Then, the sharing of IDs to generate address and the way to generate them is not part of this protocol but, addons MUST have a way to know ahead of time how to generate others addons addresses to be able to communicate, this can be on their API specification, a hardcoded value or whatever. The default implementation that an implementor may follow is to use CRC16 to generate these addresses, but not obligatory as long as others know it's ID.
 The address will be part of the content sent, since this is for minecraft and using scriptevent calls, the ID of a message is follows as b"matp:"[SENDER][CONTENT], where SENDER is a 3 byte address.
-1.2 Datagram packing
+#### 1.2 Datagram packing
 When sending the data we will want to read/write data in binary, but minecraft only supports strings, so implementors MUST convert a Datagram to Utf16 string by packing each 2 bytes into 1 char, and the same way when receiving a Datagram, they MUST be able, but not obligatory to, read it as a packed byte array.
 The focus of this protocol is to send data to other addons in a reliable way evicting the less amount of scriptevent calls possible. For so, the default max Datagram size is of 8Kb, but each connection may be able to send more if all the targets agree with so on a multitarget message, or if the specific target agrees on a single target one.
 
-2 Handshake
+#### 2 Handshake
 When an addon initializes, it might be able to request a handshake to another one, this is made using Handshake Datagrams.
 These are normal datagrams that as specificed to determine the handshake of ends. To initialize the content, a client sends it's data to the target, if after a certain time, this choosen by the client, no response was given, the handshake fails and a NoTarget error is returned. 
 On the handshake encrypted data is sent, the function to do so must be based on both end IDs to share the initial contents safely. The methods are talked better on 6.
@@ -33,7 +33,7 @@ Client <---- [Server1,Server3]
 
 This might and will generate multiple responses to the client, and this is inteended, since the client MUST know or implement a way to handle multiple responses at a time, which can be handled separatedly with promises.
 
-3 Headers
+#### 3 Headers
 On sending the data, a Content, it will contain some information about the contents inside them. We can imagine this as a Box with a huge amount of letters, eache letter has it's contents.
 A dragram will have it's header as the following:
 [1Bit:MultipleTarges][7Bit:Unused][4Bytes:Sender]
@@ -46,31 +46,32 @@ The IsHandshake bit determines if the content being sent is used to stablish a h
 The Receiver bytes determines who this is being sent to.
 
 On the receiver side, if some header determines if it's encrypted or compressed, the other side must know how to decrypt and/or decompress the content sent. The order MUST be Compression -> Encryption, and compression SHOULD be used only and only when some Frame size is >2kb to not generate too much work. This is not obligatory, but an recommendation an implementor can ignore. 
-4 Frames
+#### 4 Frames
 Frames on MATP are values that can be shared between one end to another, then we understand them as the read content that will be sent. Note that as they are one end to another, the values in here are at connection level, so no a client should not break another one, as theyre seem as independents.
 Each Frame has an type, then, a frame can be understood as:
 [4Bit:Type][4Bit:ReservedForType][PerTypePayload]
 The Type determines the type of the frame.
 The 4 bits are reserved for type that may content data in size of 4 bits.
-4.1 Types:
-	4.1.1:Ping: 1
-		Of Type 1, is used to send data and track if the other addon is still receiving data. No Payload and ReservedForType is unused.
-	4.1.2:Crypto: 2
-		Of type 2, is used to send data used specifically to determine data about cryptography ajd parameters. These must be encrypted always with the data provided on the handshake, the only case when not, is during the handshake it self.
+### 4.1 Types:
+#### 4.1.1:Ping:
+Of Type 1, is used to send data and track if the other addon is still receiving data. No Payload and ReservedForType is unused.
+
+####4.1.2:Crypto:
+Of type 2, is used to send data used specifically to determine data about cryptography ajd parameters. These must be encrypted always with the data provided on the handshake, the only case when not, is during the handshake it self.
 		New values that determine how data is encrypted will be sent, so if a Client sends a new key, the server adopts it and on responses uses that new key to encrypt data.
 		Can be seen as: [4Bit=2][1Bit:FIN][1Bit:Encrypted][2Bit:TypeOfData][VarID:ID][VarID:Length][Length:Payload]
 		The Encrypted Bit must be 1 if the header it is at is 1 as well, and MUST be 0 only at handshakes.
 		The Fin bit determines if this Frame contains all the data required to finalize. If not, the contents are enqueued until it arrives until timeout.
 		TypeOfData determines the type of data being sent: 0 for Keys, 1 for Transferation Parameters, 2 for content and 3 used later. On receiving a Key, it's understood that the one requesting the handshake already had established a connection before. So, if no NoKey error is received, then the sender confirmed the key and established the connection.
 		A Crypto frame with Transport parameters MUST be sent without any kind of fragmentation
-	4.1.3: Data: 3
-		This is used to send data to one end to another, not necessarily to send encrypted data.
+#### 4.1.3: Data:
+This is used to send data to one end to another, not necessarily to send encrypted data.
 		Can be visualized as: [4Bit=3][1Bit:FIN][1Bit:Encrypted][2Bit:Compression][VarID:ID][VarID:Length][Length:Payload]
 		The FIN bit determines weather this is the last content that was sent
 		The encrytped bit determines if the content was encrypted, if so, uses the key between both ends
 		The Compression bits determine the type of compression
-	4.1.4: CloseConnection: 4
-		Used only to determine that the connection is being ended with some aditional data.
+#### 4.1.4: CloseConnection:
+Used only to determine that the connection is being ended with some aditional data.
 		[4Bit=4][1Bit=Encrypted][3Bit:Content][VarID:Length][Length:Payload][VarID?:Length2][Length2?:Payload2]
 		Encrypted determines if the content is encrypted, MUST be 1 if the header determines so.
 		Content determines the kind of content being sent. Its a bitflag with tje following types: 
@@ -103,7 +104,7 @@ requesting the handshake already had established a connection before. So, if no 
 	     [4Bit=15][1Bit:ContainReason][3Bit:ErrorType][VarId:Len][Len:Reason]
 	     More talked in 5. The reason is a non encrypted text containing non Internal data about the error and its reason.
 		
-4.2 Transfer Parameters:
+### 4.2 Transfer Parameters:
 Transport parameters are values used to both connections to agree with. A Transport parameter will be sent on crypto frames, and will be as the following:
     [1Bit:Key][1Bit:MaxContentLength][1Bit:MaxDataPerDatagram][1Bit:WaitBase][4Bit:Unused][32Bytes:Key][2Bytes:MaxContentLength][4Bytes:MaxDatagramSize][1Byte:WaitBase]
     The first byte defines flags. If Key, then theres key, same for others.
@@ -113,7 +114,7 @@ Transport parameters are values used to both connections to agree with. A Transp
     WaitBase: On sending a BusyFrame, the number in ticks needed be awaited, as well as any other timeout value, will be WaitBase^M, so the one requesting for waits will be able to process dsta correctly. The default for both ends on this one is 2. Note thst even without it being transferred, this is still 2 by default.
     
     
-5 Errors
+### 5 Errors
 NoTarget: 1, Used to determine when an addon tried to establish a connection with another one but this one did not respond, then the addon is not present. Can be used on addons that contains some dependency on another one
 
 NoKey: 2, Error used when stablishing a handshake between a client to a server where the client did think the server had established a connection before and stored the key but hasnt, such as on an addon that depends on 2 others, sends them the data, is updated and now depends on 3. It will generste a NoKey error on the world, since it provided the keys to the other ones and is using so as a base.
@@ -123,7 +124,7 @@ InvalidFrame: 3, Errors sent when some Datagram is sent in a wrong manner.
 LostMessage: 4, An Error to determine when a content was lost because of it beint out of order or not agreeing with the transport parameters. If the amount of LostMessages from one end exceeds the MaxLostFrame, the connection is closed telling the reason and a key if this one wants to restablish the connection, this is to don't waste unecessary proccessment time.
 
 
-6. Encrypting Methods
+### 6. Encrypting Methods
 By now any kind of encrypting is used with ChaCha20. For things that must have a length, the length is based on the content already encrypted.
 When sending some crypto for transfer parameters, the first one might not be encrypted, if the first time joining the world. But later all the contents sent in crypto frames must be encrypted with the key both ends know. The same is valid for any other kind of frame that contains payload and can be encrypted.
 The addon will use ECDH curve25519 to share the keys. After finalizing the handshake, the shared key is used as key for encrypting the content.
@@ -134,20 +135,20 @@ Client <--Crypto---- Server
 
 Where the crypto is a Crypto frame used for so. If the crypto sent is a Key one, the handshake is completed on a single sent. This is made to suppose that both ends know each other parameters
 
-7. Compression Methods.
+### 7. Compression Methods.
 When sending some data, specifically Content frames, this data, can be and depending on the size, is prefered to be compressed, but in general it begins with 2kb of data. In general 2 bits, are used to determine the type of the compression, as talked in 4.1.3, this rule will apply to every other frames.
 A encryption of value 0 will be None, thus, no encrypting was made.
 One of valur 1 will use Gzip. One of value 2 will use Lz4. And of valur 3 is unused. 
 
-8. VarIDs
+### 8. VarIDs
 IDs are values with 15 to 31 bits of length, in case 2 or 4 bytes, where the first bit determines if they're 2bytes or not. In fact they are 2 or 4 bytes, but the actual value used to determine the number value is 15 and 31 bits. This is used for not losing bytes and only send values when really required. 
 They can be used for IDs or Lengths.
 
-9. Timeout:
+### 9. Timeout:
 Timeouts are calculated on ticks. They can be used with the WaitBase parameter and the provided value by a BusyFrame. 
 The default timeout for a Handshake that fails is about 5 ticks, but is configurable per End, so on attempting and failing, ot might wait the amount of Ticks it configured. This means that on failing to establish a handshake, by default that end will wait 5 ticks before retrying it.
 
-10. Messaging
+### 10. Messaging
 On a Message that is multitarget, the way to determine which content is to who, is on looking on the ID of the message, the idea is to it to be in order of contents, so "matp:ID1ID2" on the payload will be [SenderID, Header, Length, PayloadForID1, Length PayloadForID2], where the MsgID is an VarID used to get track the id of tje message sent to that addon.
 This is the core idea for both handshakes, and normal messaging.
 When a single target message is sent, the same idea os applied,  but the header of the content will determine if its multi or single targeted, thus, it will be understood as a message of type: "matp:TARGETID" whose content is [SenderID, Header, Payload]
